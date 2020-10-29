@@ -1,2 +1,34 @@
 # massiveMIMOdetection
 Simple massive MIMO simulator that includes several data-detectors
+
+(c) 2020 Christoph Studer and Oscar Castañeda
+e-mail: studer@ethz.ch & caoscar@ethz.ch
+
+### Important information
+
+If you are using the simulator (or parts of it) for a publication, please consider citing our paper:
+
+Oscar Castañeda, Tom Goldstein, and Christoph Studer, "Data Detection in Large Multi-Antenna Wireless Systems via Approximate Semidefinite Relaxation," IEEE Transactions on Circuits and Systems I: Regular Papers, vol. 63, no. 12, pp. 2334-2346, Dec. 2016.
+
+and clearly mention this in your paper.
+
+### How to start a simulation:
+
+Simply run
+
+```sh
+detection_MIMO_sim
+```
+
+which starts a simulation of a 32 BS antenna, 16 user, QPSK massive MIMO system using several data-detectors.
+
+The simulator runs with predefined parameters. You can specify your own system and simulation parameters by passing your own "par"-structure (see the simulator for an example). The simulator also includes other data-detectors that are not set to run in the predefined parameters, but you can add them by modifying "par.detector". Please note that several methods have parameters that can be tuned to improve their performance. The simulation runs in an i.i.d. Rayleigh-fading channel, but you can also use a simple line-of-sight (LoS) channel by setting "par.los" to 1.
+
+We highly recommend you to execute the code step-by-step (using MATLAB's debug mode) in order to get a detailed understanding of the simulator.
+
+### Notes
+
+* To use the 'SDR' data-detector, you need to first install CVX [http://cvxr.com/cvx/]
+
+### Version history
+* Version 0.1: caoscar@ethz.ch - initial version for GitHub release

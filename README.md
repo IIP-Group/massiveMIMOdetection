@@ -26,6 +26,21 @@ The simulator runs with predefined parameters. You can specify your own system a
 
 We highly recommend you to execute the code step-by-step (using MATLAB's debug mode) in order to get a detailed understanding of the simulator.
 
+### Data detectors in this simulator
+
+- SIMO lower bound
+- Maximum-Likelihood (ML) using sphere decoding `[Studer & Bölcskei, 2010`]
+- Maximum Ratio Combining (MRC)
+- unbiased Zero Forcing (ZF)
+- unbiased linear Minimum Mean Squared Error (MMSE)
+- Semidefinite Relaxation (SDR)
+- Triangular Approximate Semidefinite Relaxation (TASER) `[Castañeda, Goldstein & Studer, 2016`]
+- Row-By-Row (RBR) `[Wai, Ma & Man-Cho So, 2011`]
+- ADMM-based Infinity-Norm (ADMIN) `[Shahabuddin, Juntti & Studer, 2017`]
+- BOX
+- Optimized Coordinate Descent (OCD) `[Wu, Dick, Cavallaro & Studer, 2016`]
+- K-Best
+
 ### Notes
 
 * To use the 'SDR' data-detector, you need to first install CVX [http://cvxr.com/cvx/]

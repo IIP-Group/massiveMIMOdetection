@@ -33,6 +33,8 @@ function detection_MIMO_sim(varargin)
     par.SNRdB_list = ...   % list of SNR [dB] values to be simulated        
       0:2:12;
     par.los = 0;           % use line-of-sight (LoS) channel model
+    par.chest = 'PERF';    % channel estimator to use: Options:
+                           % 'PERF', 'ML', 'BEACHES'
     par.detector = ...     % define detector(s) to be simulated. Options:
      {'SIMO','MMSE',...    % 'SIMO', 'ML', 'MRC', 'ZF', 'MMSE', 'SDR',
       'TASER','ADMIN',...  % 'TASER', 'RBR', 'ADMIN', 'BOX', 'OCD_MMSE',
@@ -155,6 +157,7 @@ function detection_MIMO_sim(varargin)
   
     % generate iid Gaussian channel matrix & noise vector
     n = sqrt(0.5)*(randn(par.MR,1)+1i*randn(par.MR,1));
+    n_H = sqrt(0.5)*(randn(par.MR,par.MT)+1i*randn(par.MR,par.MT));
     if par.los
       H = los(par); % we will use the planar wave model
     else
@@ -168,42 +171,57 @@ function detection_MIMO_sim(varargin)
     for k=1:length(par.SNRdB_list)
       
       % compute noise variance 
-      % (average SNR per receive antenna is: SNR=MT*Es/N0)
-      N0 = par.MT*par.Es*10^(-par.SNRdB_list(k)/10);
+      % (average SNR per receive antenna is: SNR=Es*||H||_F^2/MR/N0)
+      N0 = par.Es*norm(H,'fro')^2*10^(-par.SNRdB_list(k)/10)/par.MR;
       
       % transmit data over noisy channel
       y = x+sqrt(N0)*n;
+      
+      % channel estimation
+      switch (par.chest)
+        case 'PERF'
+          Hest = H;
+        case 'ML'
+          N0_chest = N0/par.Es/par.MT;
+          Hest = H + sqrt(N0_chest)*n_H;
+        case 'BEACHES'
+          N0_chest = N0/par.Es/par.MT;
+          Hn = H + sqrt(N0_chest)*n_H;
+          Hest = BEACHES(par,Hn,N0_chest);
+        otherwise
+          error('par.detector type not defined.')
+      end
     
       % algorithm loop      
       for d=1:length(par.detector)
 
         switch (par.detector{d})     % select algorithms
           case 'SIMO'                % SIMO lower bound detector
-            [idxhat,bithat] = SIMO(par,H,y,s);
+            [idxhat,bithat] = SIMO(par,Hest,y,s);
           case 'ML'                  % ML detection using sphere decoding
-            [idxhat,bithat] = ML(par,H,y);
+            [idxhat,bithat] = ML(par,Hest,y);
           case 'MRC'                 % unbiased MRC detection
-            [idxhat,bithat] = MRC(par,H,y);
+            [idxhat,bithat] = MRC(par,Hest,y);
           case 'ZF'                  % unbiased ZF detection
-            [idxhat,bithat] = ZF(par,H,y);
+            [idxhat,bithat] = ZF(par,Hest,y);
           case 'MMSE'                % unbiased MMSE detector
-            [idxhat,bithat] = MMSE(par,H,y,N0);
+            [idxhat,bithat] = MMSE(par,Hest,y,N0);
           case 'SDR'                 % Detection via exact SDR
-            [idxhat,bithat] = SDR(par,H,y);         
+            [idxhat,bithat] = SDR(par,Hest,y);
           case 'TASER'               % TASER detector
-            [idxhat,bithat] = TASER(par,H,y);
+            [idxhat,bithat] = TASER(par,Hest,y);
           case 'RBR'               % RBR detector
-            [idxhat,bithat] = RBR(par,H,y);            
+            [idxhat,bithat] = RBR(par,Hest,y);
           case 'ADMIN'               % ADMIN detector
-            [idxhat,bithat] = ADMIN(par,H,y,N0);
+            [idxhat,bithat] = ADMIN(par,Hest,y,N0);
           case 'BOX'                 % BOX detector
-            [idxhat,bithat] = BOX(par,H,y);
+            [idxhat,bithat] = BOX(par,Hest,y);
           case 'OCD_MMSE'            % OCD MMSE detector
-            [idxhat,bithat] = OCD_MMSE(par,H,y,N0);
+            [idxhat,bithat] = OCD_MMSE(par,Hest,y,N0);
           case 'OCD_BOX'             % OCD BOX detector
-            [idxhat,bithat] = OCD_BOX(par,H,y);            
+            [idxhat,bithat] = OCD_BOX(par,Hest,y);            
           case 'KBEST'               % K-Best detector
-            [idxhat,bithat] = KBEST(par,H,y);
+            [idxhat,bithat] = KBEST(par,Hest,y);
           otherwise
             error('par.detector type not defined.')      
         end
@@ -262,7 +280,7 @@ function detection_MIMO_sim(varargin)
     
 end
 
-% -- set of detector functions: 
+% -- set of detector functions:
 
 %% SIMO lower bound
 function [idxhat,bithat] = SIMO(par,H,y,s)
@@ -727,6 +745,48 @@ function [idxhat,bithat] = KBEST(par,H,y)
   end  
   bithat = par.bits(idxhat,:);
   
+end
+
+%% BEACHES denoiser
+%  Special thanks to Seyed Hadi Mirfashbafan for this function
+function Hest = BEACHES(par,Hn,N0)
+
+  hdenoised = zeros(size(Hn));
+  SURE = zeros(par.MR,1);  
+
+  for uu=1:par.MT
+      
+    hnoisy = fft(Hn(:,uu))/sqrt(par.MR);
+    N = length(hnoisy);
+    
+    % find optimal threshold for shrinkage function
+    sorth = sort(abs(hnoisy),'ascend');
+    cumsum = 0;
+    cumsuminv = sum(1./abs(hnoisy));
+    tau_opt = inf;
+    suremin = inf;
+    tau_low = 0;
+    
+    for bb = 1:N
+      tau_high = sorth(bb);
+      tau = max(tau_low,min(tau_high,N0/(2*(N-bb+1))*cumsuminv));
+      tau_low = sorth(bb);
+      SURE(bb) = cumsum + (N-bb+1)*tau^2 + N*N0 ...
+        - 2*N0*(bb-1)-tau*N0*cumsuminv;
+      cumsum = cumsum + sorth(bb).^2;
+      cumsuminv = cumsuminv - 1/sorth(bb);
+      if SURE(bb)<suremin
+        suremin = SURE(bb);
+        tau_opt = tau;
+      end
+    end
+    
+    hdenoised(:,uu) = (hnoisy./abs(hnoisy)).*max(abs(hnoisy)-tau_opt,0);
+    
+  end
+  
+  Hest = ifft(hdenoised)*sqrt(par.MR);
+
 end
 
 %% Line of sight channel generation.

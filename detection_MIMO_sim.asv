@@ -760,47 +760,37 @@ bithat = par.bits(idxhat,:);
 
 end
 
-function [F,G] = LAMA_MeanVar(par, z, sigma_sq)
+function [F,G] = LAMA_MeanVar(par,dataVec,sigma_sq)
 
 switch par.mod
     % for BPSK in complex-domain
     case 'BPSK'
         
-        F = tanh(2*real(z)./(sigma_sq));
+        F = tanh(2*real(dataVec)./(sigma_sq));
         G =  1 - abs(F).^2;
         
-        % compute estimate while considering numerical accuracy
+    % compute estimate while considering numerical accuracy
     otherwise
         
-        % -- compute input matrices
-        inputM = z*ones(1,length(par.symbols));
-        
-        % -- compute symbol matrices
-        symbolM = ones(length(z),1)*par.symbols;
+        inputM = dataVec*ones(1,length(par.symbols));
+        symbolM = ones(length(dataVec),1)*par.symbols;
         sigma_sqM = sigma_sq*ones(1,length(par.symbols));
         
-        % -- compute distance
         input_symM = abs(inputM - symbolM).^2;
         [~, index_vec] = min(input_symM,[],2);
         
         symbolMinM = (par.symbols(index_vec).')*(ones(1,length(par.symbols)));
         expo = -(input_symM - abs(inputM - symbolMinM).^2);
-        
-        % -- compute pdf
         pdf = exp(expo./(sigma_sqM));
         pdf(isnan(pdf)) = 1;
         
         sumM = sum(pdf,2)*ones(1,length(par.symbols));
-        
-        % -- compute weight constant
         w = pdf./sumM;
         
-        % -- compute mean (F)
         F = w*(par.symbols.');
         symbolM2 = ones(length(F),1)*par.symbols;
         FM = F*ones(1,length(par.symbols));
         
-        % -- compute variance (G)
         G = sum(w.*(abs(symbolM2-FM).^2),2);
         
         if any(isnan(pdf))|any(isinf(pdf))

@@ -4,13 +4,20 @@
 % -- (c) 2020 Christoph Studer and Oscar Castañeda
 % -- e-mail: studer@ethz.ch and caoscar@ethz.ch
 % -------------------------------------------------------------------------
-% -- If you use this simulator or parts of it, then you must cite our 
-% -- paper: 
+% -- If you use this simulator or parts of it, then you must cite our
+% -- papers:
+%
 % -- Oscar Castañeda, Tom Goldstein, and Christoph Studer,
 % -- "Data Detection in Large Multi-Antenna Wireless Systems via
 % -- Approximate Semidefinite Relaxation," 
 % -- IEEE Transactions on Circuits and Systems I: Regular Papers,
 % -- vol. 63, no. 12, pp. 2334-2346, Dec. 2016.
+%
+% -- Charles Jeon, Oscar Castañeda, and Christoph Studer
+% -- "A 354 Mb/s 0.37 mm2 151 mW 32-User 256-QAM Near-MAP Soft-Input
+% -- Soft-Output Massive MU-MIMO Data Detector in 28nm CMOS," 
+% -- IEEE Solid-State Circuits Letters, vol. 2, no. 9, pp. 127-130, 
+% -- Oct. 2019.
 % =========================================================================
 
 function detection_MIMO_sim(varargin)
@@ -23,27 +30,31 @@ function detection_MIMO_sim(varargin)
         
     % set default simulation parameters     
     par.runId = 0;         % simulation ID (used to reproduce results)
-    par.MR = 64;           % receive antennas 
-    par.MT = 64;           % transmit antennas (set not larger than MR!)         
-    par.mod = '16QAM';      % modulation type: 'BPSK','QPSK','16QAM','64QAM'             
-    par.trials = 5e2;      % number of Monte-Carlo trials (transmissions)
+    par.MR = 32;           % receive antennas 
+    par.MT = 16;           % transmit antennas (set not larger than MR!)         
+    par.mod = 'QPSK';      % modulation type: 'BPSK','QPSK','16QAM','64QAM'             
+    par.trials = 1e4;      % number of Monte-Carlo trials (transmissions)
     par.simName = ...      % simulation name (used for saving results)
       ['ERR_', num2str(par.MR), 'x', num2str(par.MT), '_', ...
         par.mod, '_', num2str(par.trials),'Trials'];
     par.SNRdB_list = ...   % list of SNR [dB] values to be simulated        
-      15:2:25;
-    par.los = 0;           % use line-of-sight (LoS) channel model
+      0:2:12;    
+    par.los = 0;           % use line-of-sight (LoS) channel
     par.chest = 'PERF';    % channel estimator to use: Options:
-                           % 'PERF', 'ML', 'BEACHES'
+                           % 'PERF', 'ML', 'BEACHES'    
     par.detector = ...     % define detector(s) to be simulated. Options:
-     {'SIMO','MMSE',...    % 'SIMO', 'ML', 'MRC', 'ZF', 'MMSE', 'SDR',
-      'ADMIN',...  % 'TASER', 'RBR', 'ADMIN', 'BOX', 'OCD_MMSE',
-      'OCD_BOX','LAMA'};  % 'OCD_BOX', 'KBEST', 'LAMA'
-                           % NOTE: 'ML' and 'SDR' take a long time if used
-                           %       for large systems 
-                           % NOTE: 'SDR' requires CVX, available here:
+     {'SIMO','MMSE',...    % 'SIMO', 'ML', 'MRC', 'ZF', 'MMSE', 'SDR_RAND',
+      'TASER_R','LAMA',... % 'SDR_R1', 'TASER', 'TASER_R', 'RBR', 'LAMA',
+      'ADMIN',...          % 'ADMIN', 'BOX', 'OCD_MMSE', 'OCD_BOX', 'KBEST'
+      'OCD_BOX','KBEST'};  % NOTE: 'ML', 'SDR_RAND', and 'SDR_R1' take a
+                           %       long time if used for large systems 
+                           % NOTE: 'SDR_RAND' and 'SDR_R1' requires CVX,
+                           %       available here: 
                            %       http://cvxr.com/cvx/download/                         
-                                                  
+                                   
+    % SDR_RAND parameters -------------------------------------------------
+    par.SDR_RAND.L = 50;   % Number of randomizations
+                           
     % TASER parameters ----------------------------------------------------
     par.TASER.iters = 100;       % Number of TASER iterations
     par.TASER.alphaScale = 0.99; % Alpha scale for TASER's step size.
@@ -64,8 +75,20 @@ function detection_MIMO_sim(varargin)
     %For LoS channels, you will need to tune par.TASER.alphaScale
     %For 32x16 LoS QPSK, 0.85 worked well
     
+    % TASER_R parameters --------------------------------------------------
+    par.TASER_R.iters = 100;       % Number of TASER iterations
+    % Please check the comments in 'TASER parameters' for guidelines on
+    % par.TASER_R.alphaScale
+    par.TASER_R.alphaScale = 0.99; % Alpha scale for TASER's step size.    
+    par.TASER_R.L = 50;            % Number of randomizations
+    
     % RBR parameters ------------------------------------------------------
     par.RBR.iters = 20;       % Number of RBR iterations
+    
+    % LAMA parameters ---------------------------------------------------
+    par.LAMA.iters = 30;         % Number of LAMA iterations
+    par.LAMA.theta_tau_s = 0.5;  % Damping constant for moment variance param, (0,1)
+    par.LAMA.theta_tau_z = 0.5;  % Damping constant for signal variance param, (0,1)
     
     % ADMIN parameters ----------------------------------------------------
     par.ADMIN.betaScale = 3;  % =1 returns biased MMSE on first iteration,
@@ -88,11 +111,6 @@ function detection_MIMO_sim(varargin)
     % K-BEST parameters ---------------------------------------------------
     par.KBEST.K = 5;          % Number of best nodes to consider at a time
     
-    % LAMA parameters ---------------------------------------------------
-    par.LAMA.iters = 30;       % Number of LAMA iterations
-    par.LAMA.theta_tau_s = 0.5;  % Damping constant for moment variance param, (0,1)
-    par.LAMA.theta_tau_z = 0.5;  % Damping constant for signal variance param, (0,1)
-    
   else
       
     disp('use custom simulation settings and parameters...')    
@@ -100,7 +118,7 @@ function detection_MIMO_sim(varargin)
     
   end
 
-  % -- initialization
+  % -- initialization    
   
   % use runId random seed (enables reproducibility)
   rng(par.runId,'twister'); 
@@ -162,12 +180,12 @@ function detection_MIMO_sim(varargin)
   
     % generate iid Gaussian channel matrix & noise vector
     n = sqrt(0.5)*(randn(par.MR,1)+1i*randn(par.MR,1));
-    n_H = sqrt(0.5)*(randn(par.MR,par.MT)+1i*randn(par.MR,par.MT));
+    n_H = sqrt(0.5)*(randn(par.MR,par.MT)+1i*randn(par.MR,par.MT));    
     if par.los
       H = los(par); % we will use the planar wave model
     else
       H = sqrt(0.5)*(randn(par.MR,par.MT)+1i*randn(par.MR,par.MT));
-    end
+    end    
     
     % transmit over noiseless channel (will be used later)
     x = H*s;
@@ -211,20 +229,30 @@ function detection_MIMO_sim(varargin)
             [idxhat,bithat] = ZF(par,Hest,y);
           case 'MMSE'                % unbiased MMSE detector
             [idxhat,bithat] = MMSE(par,Hest,y,N0);
-          case 'SDR'                 % Detection via exact SDR
-            [idxhat,bithat] = SDR(par,Hest,y);
+          case 'SDR_RAND'            % detection via SDR with randomization
+            srng = rng;
+            [idxhat,bithat] = SDR_RAND(par,Hest,y);
+            rng(srng);
+          case 'SDR_R1'              % detection via SDR with rank-1 approx
+            srng = rng;
+            [idxhat,bithat] = SDR_R1(par,Hest,y);
+            rng(srng);
           case 'TASER'               % TASER detector
             [idxhat,bithat] = TASER(par,Hest,y);
-          case 'RBR'               % RBR detector
+          case 'TASER_R'             % TASER detector
+            srng = rng;
+            [idxhat,bithat] = TASER_R(par,Hest,y);
+            rng(srng);
+          case 'RBR'                 % RBR detector
             [idxhat,bithat] = RBR(par,Hest,y);
+          case 'LAMA'                % LAMA detector
+            [idxhat,bithat] = LAMA(par,Hest,y,N0);
           case 'ADMIN'               % ADMIN detector
             [idxhat,bithat] = ADMIN(par,Hest,y,N0);
           case 'BOX'                 % BOX detector
             [idxhat,bithat] = BOX(par,Hest,y);
           case 'OCD_MMSE'            % OCD MMSE detector
             [idxhat,bithat] = OCD_MMSE(par,Hest,y,N0);
-          case 'LAMA'                % LAMA detector
-            [idxhat,bithat] = LAMA(par,Hest,y,N0);
           case 'OCD_BOX'             % OCD BOX detector
             [idxhat,bithat] = OCD_BOX(par,Hest,y);            
           case 'KBEST'               % K-Best detector
@@ -379,9 +407,73 @@ function [idxhat,bithat] = MMSE(par,H,y,N0)
   bithat = par.bits(idxhat,:);
 end
 
-%% detection via exact SemiDefinite Relaxation (SDR)
+%% detection via exact SemiDefinite Relaxation (SDR) with randomization
 %  You need to install CVX to use this
-function [idxhat,bithat] = SDR(par,H,y)
+% -- Zhi-Quan Luo, Wing-Kin Ma, Anthony Man-Cho So, Yinyu Ye, and
+% -- Shuzhong Zhang, "Semidefinite Relaxation of Quadratic Optimization
+% -- Problems," IEEE Signal Processing Magazine,
+% -- vol. 27, no. 3, pp. 20-34, May 2010
+function [idxhat,bithat] = SDR_RAND(par,H,y)
+
+  switch par.mod
+    case 'QPSK'
+      % -- convert to real domain
+      yR = [ real(y) ; imag(y) ];
+      HR = [ real(H) -imag(H) ; imag(H) real(H) ];   
+      % -- preprocessing for SDR  
+      T = [HR'*HR , -HR'*yR ; -yR'*HR yR'*yR ];
+      N = 2*par.MT+1; 
+    case 'BPSK'
+      % -- convert to real domain
+      yR = [ real(y) ; imag(y) ];
+      HR = [ real(H) ; imag(H) ];  
+      % -- preprocessing for SDR  
+      T = [HR'*HR , -HR'*yR ; -yR'*HR yR'*yR ];
+      N = par.MT+1; 
+    otherwise
+      error('modulation type not supported')
+  end  
+  
+  % -- solve SDP via CVX
+  cvx_begin quiet
+    variable S(N,N) symmetric;
+    S == semidefinite(N);       
+    minimize( trace( T*S ) );
+    diag(S) == 1;              
+  cvx_end
+  
+  % -- post processing with randomization
+  z = mvnrnd(zeros(1,N),S,par.SDR_RAND.L);
+  % we need last entry to be 1 after taking the sign:
+  z = z.*(sign(z(:,end))*ones(1,N));
+  z = sign(z);
+  z_cost = diag(z*T*z');
+  [~,z_idx] = min(z_cost);
+  
+  sRhat = z(z_idx,:);
+  sRhat = sRhat.';
+  switch par.mod
+    case 'QPSK'
+      shat = sRhat(1:par.MT,1)+1i*sRhat(par.MT+1:end-1,1);
+    case 'BPSK'  
+      shat = sRhat(1:par.MT,1);
+    otherwise
+      error('modulation type not supported')
+  end
+  
+  % -- compute outputs
+  [~,idxhat] = min(abs(shat*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
+  bithat = par.bits(idxhat,:);
+  
+end
+
+%% detection via exact SemiDefinite Relaxation (SDR) with rank-1 approx
+%  You need to install CVX to use this
+% -- Zhi-Quan Luo, Wing-Kin Ma, Anthony Man-Cho So, Yinyu Ye, and
+% -- Shuzhong Zhang, "Semidefinite Relaxation of Quadratic Optimization
+% -- Problems," IEEE Signal Processing Magazine,
+% -- vol. 27, no. 3, pp. 20-34, May 2010
+function [idxhat,bithat] = SDR_R1(par,H,y)
 
   switch par.mod
     case 'QPSK'
@@ -488,6 +580,77 @@ function [idxhat,bithat] = TASER(par,H,y)
   
 end
 
+%% detection via TASER followed by randomization (TASER_R)
+% -- Oscar Castañeda, Tom Goldstein, and Christoph Studer,
+% -- "Data Detection in Large Multi-Antenna Wireless Systems via
+% -- Approximate Semidefinite Relaxation," 
+% -- IEEE Transactions on Circuits and Systems I: Regular Papers,
+% -- vol. 63, no. 12, pp. 2334-2346, Dec. 2016.
+function [idxhat,bithat] = TASER_R(par,H,y)
+
+  switch par.mod
+    case 'QPSK'
+      % -- convert to real domain
+      yR = [ real(y) ; imag(y) ];
+      HR = [ real(H) -imag(H) ; imag(H) real(H) ];   
+      % -- preprocessing for SDR  
+      T = [HR'*HR , -HR'*yR ; -yR'*HR yR'*yR ];
+      N = 2*par.MT+1;
+    case 'BPSK'
+      % -- convert to real domain
+      yR = [ real(y) ; imag(y) ];
+      HR = [ real(H) ; imag(H) ];  
+      % -- preprocessing for SDR  
+      T = [HR'*HR , -HR'*yR ; -yR'*HR yR'*yR ];
+      N = par.MT+1;
+    otherwise
+      error('modulation not supported')
+  end
+     
+  DInv = diag(diag(T).^-.5);
+  Ttilde = DInv*T*DInv;
+  stepsize = par.TASER_R.alphaScale/norm(Ttilde,2);
+
+  % -- use standard gradient on non-convex problem  
+  gradf = @(L) 2*tril(L*Ttilde);
+  proxg = @(L,t) prox_normalizer(L,diag(DInv).^-1);
+  
+  % Initialize Ltilde  
+  Ltilde = diag(diag(DInv).^-1);
+  
+  % -- Fast Iterative Soft Thresholding [Beck & Tebouille, 2009]   
+  for k = 1:par.TASER_R.iters
+    Ltilde = proxg(Ltilde-stepsize*gradf(Ltilde)); % compute proxy    
+  end  
+  
+  % -- post processing with randomization
+  z = randn(N,par.TASER_R.L);
+  %z = sign(randn(N,par.TASER_R.L));
+  %z = 2*randi(2,N,par.TASER_R.L)-3;
+  LtildeT = Ltilde.';
+  z = LtildeT*z;
+  % we need last entry to be 1 after taking the sign
+  z = z.*(ones(N,1)*sign(z(end,:)));
+  z = sign(z);
+  z_cost = diag(z'*T*z);
+  [~,z_idx] = min(z_cost);
+  
+  sRhat = z(:,z_idx);  
+  switch par.mod
+    case 'QPSK'
+      shat = sRhat(1:par.MT,1)+1i*sRhat(par.MT+1:end-1,1);
+    case 'BPSK'  
+      shat = sRhat(1:par.MT,1);
+    otherwise
+      error('modulation not supported')
+  end
+  
+  % -- compute outputs
+  [~,idxhat] = min(abs(shat*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
+  bithat = par.bits(idxhat,:);
+  
+end
+
 % normalize columns of Z to have norm equal to its corresponding scale
 function Q = prox_normalizer(Z,scale)
   [N,~] = size(Z); 
@@ -500,7 +663,6 @@ end
 % -- Coordinate Descent," 
 % -- IEEE International Conference on Acoustics, Speech and Signal 
 % -- Processing (ICASSP), May 2011, pp. 3256-3259.
-
 function [idxhat,bithat] = RBR(par,H,y)
 
   % -- convert to real domain
@@ -566,6 +728,132 @@ function [idxhat,bithat] = RBR(par,H,y)
   
 end
 
+%% LAMA (Large MIMO Approximate Message Passing)
+% Special thanks to Charles Jeon for this function
+% -- Charles Jeon, Oscar Castañeda, and Christoph Studer
+% -- "A 354 Mb/s 0.37 mm2 151 mW 32-User 256-QAM Near-MAP Soft-Input
+% -- Soft-Output Massive MU-MIMO Data Detector in 28nm CMOS," 
+% -- IEEE Solid-State Circuits Letters, vol. 2, no. 9, pp. 127-130, 
+% -- Oct. 2019.
+%
+% For original algorithm, please see:
+% -- Charles Jeon, Ramina Ghods, Arian Maleki, Christoph Studer
+% -- "Optimality of large MIMO detection via approximate message passing,"
+% -- IEEE International Symposium on Information Theory (ISIT),
+% -- pp. 1227-1231, June 2015.
+function [idxhat,bithat] = LAMA(par,H,y,N0)
+
+  % transform MR x MT system to MT x MT by using Gram/matched filter
+  % -- compute Gram matrix
+  G = H'*H;
+  % -- normalize Gram
+  Gtilde = eye(par.MT) - diag(1./diag(G))*G;
+  % -- compute column gains
+  g = diag(G)/par.MR;
+  % -- compute inverse col gain
+  gtilde = 1./diag(G);
+  % -- compute matched filter
+  yMF = H'*y;
+  % -- compute normalized matched filter
+  yMFtilde = gtilde.*yMF;
+
+  % Detector parameters
+  % -- non-linear MMSE estimate
+  shat   = zeros(par.MT,par.LAMA.iters+1);
+  tau_s  = zeros(par.MT,par.LAMA.iters+1);
+  tau_p  = zeros(1 ,    par.LAMA.iters+1);
+  % -- signal mean/var estimate (modeled as s + Gaussian noise)
+  z      = zeros(par.MT,par.LAMA.iters+1);
+  tau_z = zeros(par.MT,par.LAMA.iters+1);
+  % -- Onsager term
+  v     = zeros(par.MT,par.LAMA.iters+1);
+
+  % initialize estimates
+  % -- assume input signal has variance par.Es
+  tau_s(:,1) = par.Es * ones(par.MT,1);
+  tau_p(1) = g' * tau_s(:,1);
+  % -- first signal estimate is matched filter
+  z(:,1) = yMFtilde;
+  tau_z(:,1) = (tau_p(1) + N0)*gtilde;
+  % -- damping parameters
+  theta_tau_s = par.LAMA.theta_tau_s;
+  theta_tau_z = par.LAMA.theta_tau_z;
+
+  % loop
+  for k=1:par.LAMA.iters    
+    % -- Compute moments - mean/var
+    [shat(:,k+1), tau_s(:,k+1)] = LAMA_MeanVar(par, z(:,k), tau_z(:,k));
+    % -- damp second moment estimate
+    tau_p(k+1) = theta_tau_s * ( g' * tau_s(:,k+1) ) ...
+      + (1 - theta_tau_s) * tau_p(k);
+    % -- Onsager term
+    v(:,k+1) = tau_p(k+1) / (tau_p(k) + N0) * ( z(:,k) - shat(:,k) );
+    % -- damp signal variance estimate
+    tau_z(:,k+1) = theta_tau_z * (tau_p(k+1) + N0) * gtilde ...
+      + (1-theta_tau_z) * tau_z(:,k);
+    % -- signal update
+    z(:,k+1) = yMFtilde + Gtilde * shat(:,k+1) + v(:,k+1);
+  end
+
+  % -- output signal
+  z_out = z(:,end);
+
+  % -- compute outputs
+  [~,idxhat] = min(abs(z_out*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
+  bithat = par.bits(idxhat,:);
+
+end
+
+% Special thanks to Charles Jeon for this function
+function [F,G] = LAMA_MeanVar(par, z, sigma_sq)
+
+  switch par.mod
+    % for BPSK in complex-domain
+    case 'BPSK'
+        
+      F = tanh(2*real(z)./(sigma_sq));
+      G =  1 - abs(F).^2;        
+      % compute estimate while considering numerical accuracy
+      
+    otherwise  
+        
+      % -- compute input matrices
+      inputM = z*ones(1,length(par.symbols));
+      
+      % -- compute symbol matrices
+      symbolM = ones(length(z),1)*par.symbols;
+      sigma_sqM = sigma_sq*ones(1,length(par.symbols));
+      
+      % -- compute distance
+      input_symM = abs(inputM - symbolM).^2;
+      [~, index_vec] = min(input_symM,[],2);        
+      symbolMinM = (par.symbols(index_vec).')*(ones(1,length(par.symbols)));
+      expo = -(input_symM - abs(inputM - symbolMinM).^2);
+      
+      % -- compute pdf
+      pdf = exp(expo./(sigma_sqM));
+      pdf(isnan(pdf)) = 1;
+      sumM = sum(pdf,2)*ones(1,length(par.symbols));
+      
+      % -- compute weight constant
+      w = pdf./sumM;
+
+      % -- compute mean (F)
+      F = w*(par.symbols.');
+      symbolM2 = ones(length(F),1)*par.symbols;
+      FM = F*ones(1,length(par.symbols));
+        
+      % -- compute variance (G)
+      G = sum(w.*(abs(symbolM2-FM).^2),2);
+        
+      if any(isnan(pdf))|any(isinf(pdf))
+        warning('LAMA_MeanVar: NaN or inf OCCURRED');
+      end
+
+  end
+
+end
+
 %% ADMM-based Infinity-Norm detection (ADMIN)
 % -- Shariar Shahabuddin, Markku Juntti, and Christoph Studer,
 % -- "ADMM-based Infinity Norm Detection for Large MU-MIMO: Algorithm and
@@ -627,7 +915,7 @@ end
 
 %% Optimized Coordinate Descent (OCD) MMSE version
 % -- Michael Wu, Chris Dick, Joseph R. Cavallaro, and Christoph Studer,
-% -- "High-Throughput Data Detection for Massive MU-MIMO-OFDM Usign
+% -- "High-Throughput Data Detection for Massive MU-MIMO-OFDM Using
 % -- Coordinate Descent," 
 % -- IEEE Transactions on Circuits and Systems I: Regular Papers,
 % -- vol. 63, no. 12, pp. 2357-2367, Dec. 2016.
@@ -666,166 +954,9 @@ function [idxhat,bithat] = OCD_MMSE(par,H,y,N0)
 
 end
 
-
-
-%% LAMA (Large MIMO Approximate Message Passing)
-% -- Charles Jeon, Oscar Casta�eda, and Christoph Studer
-% -- "A 354 Mb/s 0.37 mm2 151 mW 32-User 256-QAM Near-MAP Soft-Input
-% Soft-Output Massive MU-MIMO Data Detector in 28nm CMOS," 
-% -- IEEE Solid-State Circuits Letters
-% -- vol. 2, no. 9, pp. 127-130, Oct. 2019.
-%
-% For original algorithm, please see:
-% -- Charles Jeon, Ramina Ghods, Arian Maleki, Christoph Studer
-% -- "Optimality of large MIMO detection via approximate message passing,"
-% -- IEEE International Symposium on Information Theory (ISIT)
-% -- pp. 1227-1231, June. 2015.
-
-function [idxhat,bithat] = LAMA(par,H,y,N0)
-
-%% Transform MR x MT system to MT x MT by utilizing Gram/matched filter outputs
-
-% -- compute Gram matrix
-G = H'*H;
-
-% -- normalize Gram
-Gtilde = eye(par.MT) - diag(1./diag(G))*G;
-
-% -- compute column gains
-g = diag(G)/par.MR;
-
-% -- compute inverse col gain
-gtilde = 1./diag(G);
-
-% -- compute matched filter
-yMF = H'*y;
-
-% -- compute normalized matched filter
-yMFtilde = gtilde.*yMF;
-
-%% Detector parameters
-
-% -- non-linear MMSE estimate
-shat   = zeros(par.MT,par.LAMA.iters+1);
-tau_s  = zeros(par.MT,par.LAMA.iters+1);
-tau_p  = zeros(1 ,    par.LAMA.iters+1);
-
-% -- signal mean/var estimate (modeled as s + Gaussian noise)
-z      = zeros(par.MT,par.LAMA.iters+1);
-tau_z = zeros(par.MT,par.LAMA.iters+1);
-
-% -- Onsager term
-v     = zeros(par.MT,par.LAMA.iters+1);
-
-
-%% initialize estimates
-% -- assume input signal has variance par.Es
-tau_s(:,1) = par.Es * ones(par.MT,1);
-tau_p(1) = g' * tau_s(:,1);
-
-% -- first signal estimate is matched filter
-z(:,1) = yMFtilde;
-tau_z(:,1) = (tau_p(1) + N0)*gtilde;
-
-% -- damping parameters
-theta_tau_s = par.LAMA.theta_tau_s;
-theta_tau_z = par.LAMA.theta_tau_z;
-
-%% -- Loop
-for k=1:par.LAMA.iters
-    
-    % -- Compute moments - mean/var
-    [shat(:,k+1), tau_s(:,k+1)] = LAMA_MeanVar(par, z(:,k), tau_z(:,k));
-    
-    % -- damp second moment estimate
-    tau_p(k+1) = theta_tau_s * ( g' * tau_s(:,k+1) ) + (1 - theta_tau_s) * tau_p(k);
-    
-    % -- Onsager term
-    v(:,k+1) = tau_p(k+1) / (tau_p(k) + N0) * ( z(:,k) - shat(:,k) );
-    
-    % -- damp signal variance estimate
-    tau_z(:,k+1) = theta_tau_z * (tau_p(k+1) + N0) * gtilde + (1-theta_tau_z) * tau_z(:,k);
-    
-    % -- signal update
-    z(:,k+1) = yMFtilde + Gtilde * shat(:,k+1) + v(:,k+1);
-    
-end
-
-% -- output signal
-z_out = z(:,end);
-
-% -- compute outputs
-[~,idxhat] = min(abs(z_out*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
-bithat = par.bits(idxhat,:);
-
-end
-
-function [F,G] = LAMA_MeanVar(par, z, sigma_sq)
-
-switch par.mod
-    % for BPSK in complex-domain
-    case 'BPSK'
-        
-        F = tanh(2*real(z)./(sigma_sq));
-        G =  1 - abs(F).^2;
-        
-        % compute estimate while considering numerical accuracy
-    otherwise
-        
-        % -- compute input matrices
-        inputM = z*ones(1,length(par.symbols));
-        
-        % -- compute symbol matrices
-        symbolM = ones(length(z),1)*par.symbols;
-        sigma_sqM = sigma_sq*ones(1,length(par.symbols));
-        
-        % -- compute distance
-        input_symM = abs(inputM - symbolM).^2;
-        [~, index_vec] = min(input_symM,[],2);
-        
-        symbolMinM = (par.symbols(index_vec).')*(ones(1,length(par.symbols)));
-        expo = -(input_symM - abs(inputM - symbolMinM).^2);
-        
-        % -- compute pdf
-        pdf = exp(expo./(sigma_sqM));
-        pdf(isnan(pdf)) = 1;
-        
-        sumM = sum(pdf,2)*ones(1,length(par.symbols));
-        
-        % -- compute weight constant
-        w = pdf./sumM;
-        
-        % -- compute mean (F)
-        F = w*(par.symbols.');
-        symbolM2 = ones(length(F),1)*par.symbols;
-        FM = F*ones(1,length(par.symbols));
-        
-        % -- compute variance (G)
-        G = sum(w.*(abs(symbolM2-FM).^2),2);
-        
-        if any(isnan(pdf))|any(isinf(pdf))
-            warning('nan or inf OCCURRED');
-        end
-        
-        
-end
-
-end
-
-
-
-
-
-
-
-
-
-
-
-
 %% Optimized Coordinate Descent (OCD) BOX version
 % -- Michael Wu, Chris Dick, Joseph R. Cavallaro, and Christoph Studer,
-% -- "High-Throughput Data Detection for Massive MU-MIMO-OFDM Usign
+% -- "High-Throughput Data Detection for Massive MU-MIMO-OFDM Using
 % -- Coordinate Descent," 
 % -- IEEE Transactions on Circuits and Systems I: Regular Papers,
 % -- vol. 63, no. 12, pp. 2357-2367, Dec. 2016.
@@ -912,9 +1043,14 @@ function [idxhat,bithat] = KBEST(par,H,y)
 end
 
 %% BEACHES denoiser
-%  Special thanks to Seyed Hadi Mirfashbafan for this function
+% Special thanks to Seyed Hadi Mirfashbafan for this function
+% -- Seyed Hadi Mirfarshbafan, Alexandra Gallyas-Sanhueza, Ramina Ghods,
+% -- and Christoph Studer, "Beamspace Channel Estimation for Massive MIMO
+% -- mmWave Systems: Algorithms and VLSI Design," 
+% -- IEEE Transactions on Circuits and Systems I: Regular Papers,
+% -- 2020.
 function Hest = BEACHES(par,Hn,N0)
-
+  
   hdenoised = zeros(size(Hn));
   SURE = zeros(par.MR,1);  
 

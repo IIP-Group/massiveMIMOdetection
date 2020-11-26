@@ -40,6 +40,7 @@ We highly recommend you to execute the code step-by-step (using MATLAB's debug m
 - BOX
 - Optimized Coordinate Descent (OCD) `[Wu, Dick, Cavallaro & Studer, 2016`]
 - K-Best
+- Approximate message passing (LAMA) `[Jeon, Ghods, Maleki & Studer, 2015`]
 
 ### Notes
 

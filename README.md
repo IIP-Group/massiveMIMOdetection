@@ -1,7 +1,9 @@
 # massiveMIMOdetection
+
 Simple massive MIMO simulator that includes several data-detectors
 
 (c) 2020 Christoph Studer and Oscar Castañeda
+
 e-mail: studer@ethz.ch & caoscar@ethz.ch
 
 ### Important information
@@ -51,6 +53,11 @@ We highly recommend you to execute the code step-by-step (using MATLAB's debug m
 
 * To use the 'SDR' data-detector, you need to first install CVX [http://cvxr.com/cvx/]
 
+### Special thanks
+
+Special thanks to Sven Jacobsson, Charles Jeon, and Seyed Hadi Mirfarshbafan for providing functions that are used in this simulator.
+
 ### Version history
+
 * Version 0.2: caoscar@ethz.ch - added new detectors, support for channel estimation, and separated functions in files
 * Version 0.1: caoscar@ethz.ch - initial version for GitHub release

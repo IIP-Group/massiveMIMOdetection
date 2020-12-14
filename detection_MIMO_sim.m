@@ -37,16 +37,17 @@ function detection_MIMO_sim(varargin)
     par.simName = ...      % simulation name (used for saving results)
       ['ERR_', num2str(par.MR), 'x', num2str(par.MT), '_', ...
         par.mod, '_', num2str(par.trials),'Trials'];
-    par.SNRdB_list = ...   % list of SNR [dB] values to be simulated        
-      0:2:12;    
+    par.SNRdB_list = ...   % list of SNR [dB] values to be simulated
+      0:2:12;
     par.los = 0;           % use line-of-sight (LoS) channel
     par.chest = 'PERF';    % channel estimator to use: Options:
-                           % 'PERF', 'ML', 'BEACHES'    
-    par.detector = ...     % define detector(s) to be simulated. Options:
+                           % 'PERF', 'ML', 'BEACHES'
+    par.detector = ...     % define detector(s) to be simulated. Options:     
      {'SIMO','MMSE',...    % 'SIMO', 'ML', 'MRC', 'ZF', 'MMSE', 'SDR_RAND',
-      'TASER_R','LAMA',... % 'SDR_R1', 'TASER', 'TASER_R', 'RBR', 'LAMA',
-      'ADMIN',...          % 'ADMIN', 'BOX', 'OCD_MMSE', 'OCD_BOX', 'KBEST'
-      'OCD_BOX','KBEST'};  % NOTE: 'ML', 'SDR_RAND', and 'SDR_R1' take a
+      'TASER','LAMA',...   % 'SDR_R1', 'TASER', 'TASER_R', 'RBR', 'LAMA',
+      'ADMIN',...          % 'ADMIN', 'BOX', 'OCD_MMSE', 'OCD_BOX', 
+      'OCD_BOX','KBEST'};  % 'LR_LLL_DFE_rZF', 'KBEST'
+                           % NOTE: 'ML', 'SDR_RAND', and 'SDR_R1' take a
                            %       long time if used for large systems 
                            % NOTE: 'SDR_RAND' and 'SDR_R1' requires CVX,
                            %       available here: 
@@ -118,7 +119,7 @@ function detection_MIMO_sim(varargin)
     
   end
 
-  % -- initialization    
+  % -- initialization
   
   % use runId random seed (enables reproducibility)
   rng(par.runId,'twister'); 
@@ -180,12 +181,12 @@ function detection_MIMO_sim(varargin)
   
     % generate iid Gaussian channel matrix & noise vector
     n = sqrt(0.5)*(randn(par.MR,1)+1i*randn(par.MR,1));
-    n_H = sqrt(0.5)*(randn(par.MR,par.MT)+1i*randn(par.MR,par.MT));    
+    n_H = sqrt(0.5)*(randn(par.MR,par.MT)+1i*randn(par.MR,par.MT));
     if par.los
       H = los(par); % we will use the planar wave model
     else
       H = sqrt(0.5)*(randn(par.MR,par.MT)+1i*randn(par.MR,par.MT));
-    end    
+    end
     
     % transmit over noiseless channel (will be used later)
     x = H*s;
@@ -254,7 +255,9 @@ function detection_MIMO_sim(varargin)
           case 'OCD_MMSE'            % OCD MMSE detector
             [idxhat,bithat] = OCD_MMSE(par,Hest,y,N0);
           case 'OCD_BOX'             % OCD BOX detector
-            [idxhat,bithat] = OCD_BOX(par,Hest,y);            
+            [idxhat,bithat] = OCD_BOX(par,Hest,y);
+          case 'LR_LLL_DFE_rZF'      % LLL-LR-aided + DFE + rZF detector
+            [idxhat,bithat] = LR_LLL_DFE_rZF(par,Hest,y);
           case 'KBEST'               % K-Best detector
             [idxhat,bithat] = KBEST(par,Hest,y);
           otherwise
@@ -299,17 +302,17 @@ function detection_MIMO_sim(varargin)
   figure(1)
   for d = 1:length(par.detector)
     if d==1
-      semilogy(par.SNRdB_list,res.VER(d,:),marker_style{d},'LineWidth',2)
+      semilogy(par.SNRdB_list,res.BER(d,:),marker_style{d},'LineWidth',2)
       hold on
     else
-      semilogy(par.SNRdB_list,res.VER(d,:),marker_style{d},'LineWidth',2)
+      semilogy(par.SNRdB_list,res.BER(d,:),marker_style{d},'LineWidth',2)
     end
   end
   hold off
   grid on
   xlabel('average SNR per receive antenna [dB]','FontSize',12)
-  ylabel('vector error rate (VER)','FontSize',12)
-  axis([min(par.SNRdB_list) max(par.SNRdB_list) 1e-3 1])
+  ylabel('uncoded bit error rate (BER)','FontSize',12)
+  axis([min(par.SNRdB_list) max(par.SNRdB_list) 1e-4 1])
   legend(par.detector,'FontSize',12,'Interpreter','none')
   set(gca,'FontSize',12)
     
@@ -625,8 +628,6 @@ function [idxhat,bithat] = TASER_R(par,H,y)
   
   % -- post processing with randomization
   z = randn(N,par.TASER_R.L);
-  %z = sign(randn(N,par.TASER_R.L));
-  %z = 2*randi(2,N,par.TASER_R.L)-3;
   LtildeT = Ltilde.';
   z = LtildeT*z;
   % we need last entry to be 1 after taking the sign
@@ -996,6 +997,89 @@ function [idxhat,bithat] = OCD_BOX(par,H,y)
 
 end
 
+%% detection via LLL-Lattice-Reduction with decision feedback and ZF remap
+% -- Christoph Windpassinger and Robert F. H. Fischer,
+% -- "Low-Complexity Near-Maximum-Likelihood Detection and Precoding for
+% -- MIMO Systems using Lattice Reduction," Proceedings of the IEEE 
+% -- Information Theory Workshop, Mar. 2003, pp. 345-348
+function [idxhat,bithat] = LR_LLL_DFE_rZF(par,H,y)
+
+  % -- initialization
+  sEst = zeros(par.MT,1);
+    
+  % -- convert to lattice: s = alpha*(d+v)
+  switch par.mod
+    case 'BPSK'
+      v = 0.5;
+    case {'QPSK','16QAM','64QAM'}
+      v = 0.5+1i*0.5;
+    otherwise
+      error('modulation not supported')
+  end
+  alpha = 2;
+  d = par.symbols/alpha-v; % candidates in d-domain
+  y_tilde = y-alpha*H*ones(par.MT,1)*v;
+  H_tilde = H*alpha;
+   
+  % -- complex valued shifted and scaled constellations
+  [Q,R,T] = LLL(par,H_tilde);
+  y_hat = Q'*y_tilde;
+  
+  % -- DFE stages
+  for Level=par.MT:-1:1
+       
+    % -- decision feedback (DF)
+    DF = R(Level,Level+1:end)*sEst(Level+1:end);
+    y_slice = y_hat(Level) - DF;
+    
+    %-- relaxed detection
+    sEst(Level,1) = round(y_slice/R(Level,Level));
+       
+  end
+
+  % -- ZF remap to original symbol
+  sDFE = T*sEst;
+  [~,idxhat] = min(abs(sDFE*ones(1,length(par.symbols))-ones(par.MT,1)*d).^2,[],2);
+  bithat = par.bits(idxhat,:);  
+  
+end
+
+function [Q,R,T,P]= LLL(par,H)
+    
+  [Q,R] = qr(H);
+  P = eye(par.MT);
+   
+  T = eye(par.MT);  
+  
+  m = 2;
+  while m <= par.MT
+    % -- size reduction
+    for n=m-1:-1:1
+      mu = round(R(n,m)/R(n,n));
+      R(1:n,m) = R(1:n,m)-mu*R(1:n,n);
+      T(:,m) = T(:,m)-mu*T(:,n); 
+    end    
+    % -- L3 LR criterion
+    if 0.75*abs(R(m-1,m-1))^2 > abs(R(m,m))^2 + abs(R(m-1,m))^2      
+      % -- swap
+      tmp = R(:,m-1); R(:,m-1) = R(:,m); R(:,m) = tmp;            
+      tmp = T(:,m-1); T(:,m-1) = T(:,m); T(:,m) = tmp;
+      
+      % -- Givens rotation 
+      Norm = sqrt(abs(R(m-1:m,m-1)'*R(m-1:m,m-1)));
+      c = R(m-1,m-1)/Norm; s = R(m,m-1)/Norm;
+      G = [c' s'; -s c];
+      R(m-1:m,m-1:par.MT) = G*R(m-1:m,m-1:par.MT);
+      Q(:,m-1:m) = Q(:,m-1:m)*G';
+      
+      m = max(m-1,2);      
+    else
+      m = m+1;
+    end
+  end
+
+end
+
 %% K-Best detector
 function [idxhat,bithat] = KBEST(par,H,y)
 
@@ -1050,7 +1134,7 @@ end
 % -- IEEE Transactions on Circuits and Systems I: Regular Papers,
 % -- 2020.
 function Hest = BEACHES(par,Hn,N0)
-  
+
   hdenoised = zeros(size(Hn));
   SURE = zeros(par.MR,1);  
 

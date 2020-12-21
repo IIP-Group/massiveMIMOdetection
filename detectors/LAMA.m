@@ -18,7 +18,7 @@
 % -- "Optimality of large MIMO detection via approximate message passing,"
 % -- IEEE International Symposium on Information Theory (ISIT),
 % -- pp. 1227-1231, June 2015.
-function [idxhat,bithat] = LAMA(par,H,y,N0)
+function shat = LAMA(par,H,y,N0)
 
   % transform MR x MT system to MT x MT by using Gram/matched filter
   % -- compute Gram matrix
@@ -73,11 +73,7 @@ function [idxhat,bithat] = LAMA(par,H,y,N0)
   end
 
   % -- output signal
-  z_out = z(:,end);
-
-  % -- compute outputs
-  [~,idxhat] = min(abs(z_out*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
-  bithat = par.bits(idxhat,:);
+  shat = z(:,end);
 
 end
 

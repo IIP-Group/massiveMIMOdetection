@@ -6,7 +6,7 @@
 % =========================================================================
 
 %% Maximum-Likelikhood (ML) detection using sphere decoding
-function [idxML,bitML] = ML(par,H,y)
+function shat = ML(par,H,y)
 
   % -- initialization  
   Radius = inf;
@@ -43,7 +43,6 @@ function [idxML,bitML] = ML(par,H,y)
         else
           % -- valid leaf found     
           idxML = NewPath;
-          bitML = par.bits(idxML',:);
           % -- update radius (radius reduction)
           Radius = minPED;    
         end
@@ -53,5 +52,7 @@ function [idxML,bitML] = ML(par,H,y)
       Level=Level+1;      
     end    
   end
+  
+  shat = par.symbols(idxML).';
   
 end

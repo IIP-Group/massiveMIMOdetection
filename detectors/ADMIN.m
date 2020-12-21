@@ -11,7 +11,7 @@
 % -- VLSI Architecture," 
 % -- IEEE International Symposium on Circuits, Systems (ISCAS),
 % -- May 2017.
-function [idxhat,bithat] = ADMIN(par,H,y,N0)
+function shat = ADMIN(par,H,y,N0)
 
   % -- initialization
   beta = N0/par.Es*par.ADMIN.betaScale; 
@@ -29,10 +29,6 @@ function [idxhat,bithat] = ADMIN(par,H,y,N0)
       zhat = projinf(shat+lambda,alpha);
       lambda = lambda-par.ADMIN.gamma*(zhat-shat);
   end
-  
-  % -- compute outputs
-  [~,idxhat] = min(abs(shat*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
-  bithat = par.bits(idxhat,:);
   
 end
 

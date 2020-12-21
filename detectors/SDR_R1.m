@@ -11,7 +11,7 @@
 % -- Shuzhong Zhang, "Semidefinite Relaxation of Quadratic Optimization
 % -- Problems," IEEE Signal Processing Magazine,
 % -- vol. 27, no. 3, pp. 20-34, May 2010
-function [idxhat,bithat] = SDR_R1(par,H,y)
+function shat = SDR_R1(par,H,y)
 
   switch par.mod
     case 'QPSK'
@@ -53,9 +53,5 @@ function [idxhat,bithat] = SDR_R1(par,H,y)
     otherwise
       error('modulation type not supported')
   end
-  
-  % -- compute outputs
-  [~,idxhat] = min(abs(shat*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
-  bithat = par.bits(idxhat,:);
   
 end

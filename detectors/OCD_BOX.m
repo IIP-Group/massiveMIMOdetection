@@ -11,7 +11,7 @@
 % -- Coordinate Descent," 
 % -- IEEE Transactions on Circuits and Systems I: Regular Papers,
 % -- vol. 63, no. 12, pp. 2357-2367, Dec. 2016.
-function [idxhat,bithat] = OCD_BOX(par,H,y)
+function shat = OCD_BOX(par,H,y)
 
   % -- initialization
   alpha = max(real(par.symbols));
@@ -41,9 +41,7 @@ function [idxhat,bithat] = OCD_BOX(par,H,y)
     end
   end
 
-  % -- compute outputs
-  [~,idxhat] = min(abs(znew*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
-  bithat = par.bits(idxhat,:);
+  shat = znew;
 
 end
 

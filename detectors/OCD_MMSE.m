@@ -11,7 +11,7 @@
 % -- Coordinate Descent," 
 % -- IEEE Transactions on Circuits and Systems I: Regular Papers,
 % -- vol. 63, no. 12, pp. 2357-2367, Dec. 2016.
-function [idxhat,bithat] = OCD_MMSE(par,H,y,N0)
+function shat = OCD_MMSE(par,H,y,N0)
 
   % -- initialization
   alpha = N0/par.Es; % MMSE regularization; original code had a 0.5 factor
@@ -38,19 +38,8 @@ function [idxhat,bithat] = OCD_MMSE(par,H,y,N0)
       r = r - H(:,uu)*deltaz(uu);
       zold(uu) = znew(uu);
     end
-  end
+  end  
 
-  % -- compute outputs
-  [~,idxhat] = min(abs(znew*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
-  bithat = par.bits(idxhat,:);
-
-end
-
-% project into alpha infinity-norm ball
-function sproj = projinf(s,alpha)
-  sr = real(s);
-  sr = max(min(sr,alpha),-alpha);  
-  si = imag(s);
-  si = max(min(si,alpha),-alpha);
-  sproj = sr + 1i*si;
+  shat = znew;
+  
 end

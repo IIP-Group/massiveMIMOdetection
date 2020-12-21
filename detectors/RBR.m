@@ -11,7 +11,7 @@
 % -- Coordinate Descent," 
 % -- IEEE International Conference on Acoustics, Speech and Signal 
 % -- Processing (ICASSP), May 2011, pp. 3256-3259.
-function [idxhat,bithat] = RBR(par,H,y)
+function shat = RBR(par,H,y)
 
   % -- convert to real domain
   switch par.mod
@@ -68,10 +68,6 @@ function [idxhat,bithat] = RBR(par,H,y)
       shat = shat(1:par.MT,1);
     otherwise
       error('not supported')
-  end
-
-  % -- compute outputs  
-  [~,idxhat] = min(abs(shat*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
-  bithat = par.bits(idxhat,:);   
+  end  
   
 end

@@ -6,7 +6,7 @@
 % =========================================================================
 
 %% K-Best detector
-function [idxhat,bithat] = KBEST(par,H,y)
+function shat = KBEST(par,H,y)
 
   % -- preprocessing
   [Q,R] = qr(H);
@@ -40,13 +40,6 @@ function [idxhat,bithat] = KBEST(par,H,y)
     Kbest_PED_list=PED_list(1:min(par.KBEST.K,length(PED_list)));
   end
   % -- take the best
-  s=s(:,1);
-  
-  % -- compute outputs
-  idxhat=zeros(par.MT,1);
-  for i=[1:par.MT]
-    idxhat(i,1)= find(s(i)==par.symbols);
-  end  
-  bithat = par.bits(idxhat,:);
+  shat=s(:,1);
   
 end

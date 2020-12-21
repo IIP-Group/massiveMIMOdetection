@@ -88,7 +88,7 @@ function detection_MIMO_sim(varargin)
     par.RBR.iters = 20;       % Number of RBR iterations
     
     % LAMA parameters ---------------------------------------------------
-    par.LAMA.iters = 30;         % Number of LAMA iterations
+    par.LAMA.iters = 30;        % Number of LAMA iterations
     par.LAMA.theta_tau_s = 0.5;  % Damping constant for moment variance param, (0,1)
     par.LAMA.theta_tau_z = 0.5;  % Damping constant for signal variance param, (0,1)
     
@@ -185,6 +185,10 @@ function detection_MIMO_sim(varargin)
   res.SER = zeros(length(par.detector),length(par.SNRdB_list));
   % bit error rate:
   res.BER = zeros(length(par.detector),length(par.SNRdB_list));
+  % mean-squared error:
+  res.MSE = zeros(length(par.detector),length(par.SNRdB_list));
+  % vector-magnitude
+  res.VM = zeros(length(par.detector),length(par.SNRdB_list));
 
   % generate random bit stream (antenna x bit x trial)
   bits = randi([0 1],par.MT,par.Q,par.trials);
@@ -243,55 +247,61 @@ function detection_MIMO_sim(varargin)
 
         switch (par.detector{d})     % select algorithms
           case 'SIMO'                % SIMO lower bound detector
-            [idxhat,bithat] = SIMO(par,Hest,y,s);
+            shat = SIMO(par,Hest,y,s);
           case 'ML'                  % ML detection using sphere decoding
-            [idxhat,bithat] = ML(par,Hest,y);
+            shat = ML(par,Hest,y);
           case 'MRC'                 % unbiased MRC detection
-            [idxhat,bithat] = MRC(par,Hest,y);
+            shat = MRC(Hest,y);
           case 'ZF'                  % unbiased ZF detection
-            [idxhat,bithat] = ZF(par,Hest,y);
+            shat = ZF(Hest,y);
           case 'MMSE'                % unbiased MMSE detector
-            [idxhat,bithat] = MMSE(par,Hest,y,N0);
+            shat = MMSE(par,Hest,y,N0);
           case 'SDR_RAND'            % detection via SDR with randomization
             srng = rng;
-            [idxhat,bithat] = SDR_RAND(par,Hest,y);
+            shat = SDR_RAND(par,Hest,y);
             rng(srng);
           case 'SDR_R1'              % detection via SDR with rank-1 approx
             srng = rng;
-            [idxhat,bithat] = SDR_R1(par,Hest,y);
+            shat = SDR_R1(par,Hest,y);
             rng(srng);
           case 'TASER'               % TASER detector
-            [idxhat,bithat] = TASER(par,Hest,y);
+            shat = TASER(par,Hest,y);
           case 'TASER_R'             % TASER detector
             srng = rng;
-            [idxhat,bithat] = TASER_R(par,Hest,y);
+            shat = TASER_R(par,Hest,y);
             rng(srng);
           case 'RBR'                 % RBR detector
-            [idxhat,bithat] = RBR(par,Hest,y);
+            shat = RBR(par,Hest,y);
           case 'LAMA'                % LAMA detector
-            [idxhat,bithat] = LAMA(par,Hest,y,N0);
+            shat = LAMA(par,Hest,y,N0);
           case 'ADMIN'               % ADMIN detector
-            [idxhat,bithat] = ADMIN(par,Hest,y,N0);
+            shat = ADMIN(par,Hest,y,N0);
           case 'BOX'                 % BOX detector
-            [idxhat,bithat] = BOX(par,Hest,y);
+            shat = BOX(par,Hest,y);
           case 'OCD_MMSE'            % OCD MMSE detector
-            [idxhat,bithat] = OCD_MMSE(par,Hest,y,N0);
+            shat = OCD_MMSE(par,Hest,y,N0);
           case 'OCD_BOX'             % OCD BOX detector
-            [idxhat,bithat] = OCD_BOX(par,Hest,y);
+            shat = OCD_BOX(par,Hest,y);
           case 'LR_LLL_DFE_rZF'      % LLL-LR-aided + DFE + rZF detector
-            [idxhat,bithat] = LR_LLL_DFE_rZF(par,Hest,y);
+            shat = LR_LLL_DFE_rZF(par,Hest,y);
           case 'KBEST'               % K-Best detector
-            [idxhat,bithat] = KBEST(par,Hest,y);
+            shat = KBEST(par,Hest,y);
           otherwise
             error('par.detector type not defined.')      
         end
 
+        % -- compute bit outputs
+        [~,idxhat] = min(abs(shat*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
+        bithat = par.bits(idxhat,:);
+        
         % -- compute error metrics
         err = (idx~=idxhat);
         res.VER(d,k) = res.VER(d,k) + any(err);
         res.SER(d,k) = res.SER(d,k) + sum(err)/par.MT;    
         res.BER(d,k) = res.BER(d,k) + ...
-                         sum(sum(bits(:,:,t)~=bithat))/(par.MT*par.Q);                   
+                       sum(sum(bits(:,:,t)~=bithat))/(par.MT*par.Q);
+        res.MSE(d,k) = res.MSE(d,k) + norm(shat - s)^2;
+        res.VM(d,k) = res.VM(d,k) + norm(s)^2;
         
       end % algorithm loop
                  
@@ -312,6 +322,9 @@ function detection_MIMO_sim(varargin)
   res.VER = res.VER/par.trials;
   res.SER = res.SER/par.trials;
   res.BER = res.BER/par.trials;
+  res.EVM = sqrt(res.MSE./res.VM).*100;
+  res.MSE = res.MSE/par.trials;
+  res.VM = res.VM/par.trials;
   res.time_elapsed = time_elapsed;
   
   % -- save final results (par and res structures)
@@ -321,9 +334,11 @@ function detection_MIMO_sim(varargin)
   % -- show results (generates fairly nice Matlab plot) 
       
   marker_style = {'bo-','rs--','mv-.','kp:','g*-','c>--','yx:'};
+  
+  % -- plot uncoded BER
   figure(1)
   for d = 1:length(par.detector)
-    if d==1
+    if d==1      
       semilogy(par.SNRdB_list,res.BER(d,:),marker_style{d},'LineWidth',2)
       hold on
     else
@@ -333,8 +348,26 @@ function detection_MIMO_sim(varargin)
   hold off
   grid on
   xlabel('average SNR per receive antenna [dB]','FontSize',12)
-  ylabel('uncoded bit error rate (BER)','FontSize',12)
+  ylabel('uncoded bit error rate (BER)','FontSize',12)  
   axis([min(par.SNRdB_list) max(par.SNRdB_list) 1e-4 1])
+  legend(par.detector,'FontSize',12,'Interpreter','none')
+  set(gca,'FontSize',12)
+  
+  % -- plot EVM
+  figure(2)
+  for d = 1:length(par.detector)
+    if d==1
+      plot(par.SNRdB_list,res.EVM(d,:),marker_style{d},'LineWidth',2)
+      hold on
+    else
+      plot(par.SNRdB_list,res.EVM(d,:),marker_style{d},'LineWidth',2)
+    end
+  end
+  hold off
+  grid on
+  xlabel('average SNR per receive antenna [dB]','FontSize',12)  
+  ylabel('error-vector magnitude (EVM)','FontSize',12)
+  axis([min(par.SNRdB_list) max(par.SNRdB_list) 0 50])
   legend(par.detector,'FontSize',12,'Interpreter','none')
   set(gca,'FontSize',12)
     

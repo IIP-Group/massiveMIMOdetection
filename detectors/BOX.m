@@ -6,7 +6,7 @@
 % =========================================================================
 
 %% BOX detector
-function [idxhat,bithat] = BOX(par,H,y)
+function shat = BOX(par,H,y)
 
   % -- initialization
   alpha = max(real(par.symbols));
@@ -17,10 +17,6 @@ function [idxhat,bithat] = BOX(par,H,y)
     shat = shat-par.BOX.tau*H'*(H*shat-y);
     shat = projinf(shat,alpha);
   end
-  
-  % -- compute outputs
-  [~,idxhat] = min(abs(shat*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
-  bithat = par.bits(idxhat,:);
   
 end
 

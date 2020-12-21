@@ -10,7 +10,7 @@
 % -- "Low-Complexity Near-Maximum-Likelihood Detection and Precoding for
 % -- MIMO Systems using Lattice Reduction," Proceedings of the IEEE 
 % -- Information Theory Workshop, Mar. 2003, pp. 345-348
-function [idxhat,bithat] = LR_LLL_DFE_rZF(par,H,y)
+function shat = LR_LLL_DFE_rZF(par,H,y)
 
   % -- initialization
   sEst = zeros(par.MT,1);
@@ -25,7 +25,6 @@ function [idxhat,bithat] = LR_LLL_DFE_rZF(par,H,y)
       error('modulation not supported')
   end
   alpha = 2;
-  d = par.symbols/alpha-v; % candidates in d-domain
   y_tilde = y-alpha*H*ones(par.MT,1)*v;
   H_tilde = H*alpha;
    
@@ -46,9 +45,8 @@ function [idxhat,bithat] = LR_LLL_DFE_rZF(par,H,y)
   end
 
   % -- ZF remap to original symbol
-  sDFE = T*sEst;
-  [~,idxhat] = min(abs(sDFE*ones(1,length(par.symbols))-ones(par.MT,1)*d).^2,[],2);
-  bithat = par.bits(idxhat,:);  
+  sDFE = T*sEst;    
+  shat = alpha*(sDFE+v);  
   
 end
 

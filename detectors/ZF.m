@@ -6,10 +6,9 @@
 % =========================================================================
 
 %% unbiased Zero Forcing (ZF) detector
-function [idxhat,bithat] = ZF(par,H,y)
+function shat = ZF(H,y)
   W = (H'*H)\(H');
   shat = W*y;
   G = real(diag(W*H));
-  [~,idxhat] = min(abs(shat*ones(1,length(par.symbols))-G*par.symbols).^2,[],2);
-  bithat = par.bits(idxhat,:);
+  shat = shat./G;
 end

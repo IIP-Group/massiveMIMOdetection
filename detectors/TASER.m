@@ -11,7 +11,7 @@
 % -- Approximate Semidefinite Relaxation," 
 % -- IEEE Transactions on Circuits and Systems I: Regular Papers,
 % -- vol. 63, no. 12, pp. 2334-2346, Dec. 2016.
-function [idxhat,bithat] = TASER(par,H,y)
+function shat = TASER(par,H,y)
 
   switch par.mod
     case 'QPSK'
@@ -56,10 +56,6 @@ function [idxhat,bithat] = TASER(par,H,y)
     otherwise
       error('modulation not supported')
   end
-  
-  % -- compute outputs
-  [~,idxhat] = min(abs(shat*ones(1,length(par.symbols))-ones(par.MT,1)*par.symbols).^2,[],2);
-  bithat = par.bits(idxhat,:);
   
 end
 
